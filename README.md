@@ -137,3 +137,30 @@ Tests create an isolated SQLite database for fast deterministic execution. **SQL
 4. Scalable leased-dispatch scheduling, rate-limits, circuit breakers, backpressure, retention.
 
 **Portfolio talking point:** explain why an outbox in PostgreSQL closes the DB→broker loss window, why leases recover worker crashes, and why replay needs separate audit history. These are the hard parts—not merely returning HTTP 200.
+
+## Interactive API reference (no Docker required)
+
+HookRelay serves a **Swagger UI reference at `/docs`** and a machine-readable **OpenAPI 3.0 specification at `/openapi.json`**. The specification covers all 12 Flask API operations, status codes, bearer authentication, incoming HMAC signatures, request fields, responses, and example payloads. The `openapi-spec-validator` test dependency validates it in CI; a route-coverage test catches endpoints that haven't been documented.
+
+You can explore the API using **Python and temporary local SQLite** without PostgreSQL, Redis, Docker, or Celery workers. In PowerShell from the repository root:
+
+```powershell
+# One-time install (only if you haven't installed the test extras yet)
+python -m pip install -e ".[test]"
+
+# Set a local-only token; don't use this example value in a deployment.
+$env:ADMIN_API_KEY = "local-demo-key-replace-me"
+$env:DATABASE_URL = "sqlite:///hookrelay-docs.db"
+
+# Create the local database schema (once)
+python -m alembic upgrade head
+
+# Start Flask; open http://127.0.0.1:8000/docs in your browser
+python -m flask --app hookrelay run --host 127.0.0.1 --port 8000
+```
+
+In Swagger UI, use **Authorize** to enter the `ADMIN_API_KEY` token (not the literal `Bearer` prefix) for `/api/v1/*` calls. Create an endpoint and observe its signing secret: **save it securely**, because list endpoints do not return secrets. Creating a destination requires a URL you control; `https://example.org/webhooks` in example responses is illustrative, not a working receiver.
+
+**Signed ingress:** To exercise `POST /hooks/{public_key}` you must calculate `X-HookRelay-Signature` over the **exact bytes** Swagger UI will send. The browser cannot automatically sign an edited request body. The Python signing example above is the most reliable way to send a signed event. The `X-HookRelay-Event-Id` header is required, and only identical repeated raw payloads with the same ID are deduplicated.
+
+**Important:** `/docs` and `/openapi.json` are deliberately public reference pages, not live demo credentials. Swagger UI loads JavaScript and CSS from jsDelivr, so the browser needs internet access and you should not enter production admin tokens into an unreviewed deployment. For the actual worker pipeline, Redis/Celery and PostgreSQL are still recommended; this local SQLite server demonstrates HTTP API operations but **will not deliver queued webhooks automatically** without a running dispatcher and worker. Use `python -m hookrelay.reliability_demo` for a Docker-free signed HTTP delivery and recovery demonstration.

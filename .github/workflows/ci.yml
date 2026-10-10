@@ -14,6 +14,8 @@ jobs:
           cache: pip
       - run: pip install -e '.[test]'
       - run: python -m compileall -q hookrelay tests migrations
+      - name: Validate published OpenAPI 3 specification
+        run: python -m openapi_spec_validator hookrelay/static/openapi.json
       - run: pytest --cov=hookrelay --cov-report=term-missing
       - name: Docker-free HTTP reliability demo
         run: python -m hookrelay.reliability_demo
