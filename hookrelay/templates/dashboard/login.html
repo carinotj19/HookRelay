@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark"><title>Sign in · HookRelay</title><link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}"></head>
+<body class="login-screen">
+<main class="login-card">
+  <div class="brand login-brand"><span class="brand-mark">↗</span><span>hook<span class="brand-accent">relay</span><small>OPERATIONS CONSOLE</small></span></div>
+  <div class="eyebrow">ADMINISTRATOR ACCESS</div>
+  <h1>Your webhooks.<br><span class="gradient-text">Under control.</span></h1>
+  <p class="muted">Sign in with your configured admin API key to inspect deliveries and manage webhook sources.</p>
+  {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="{{ url_for('dashboard.login') }}" class="form-stack">
+    <label for="admin_key">Admin API key</label>
+    <input id="admin_key" name="admin_key" type="password" autocomplete="off" required autofocus placeholder="Enter your admin key">
+    <button class="btn btn-primary" type="submit">Open dashboard <span aria-hidden="true">→</span></button>
+  </form>
+  <div class="login-bottom">Single-admin console · Session expires after 45 minutes.</div>
+</main>
+</body>
+</html>

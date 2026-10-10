@@ -1,0 +1,26 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Overview{% endblock %}
+{% block crumb %}OVERVIEW{% endblock %}
+{% block body %}
+<header class="page-heading"><div><div class="eyebrow">SYSTEM PULSE</div><h1>Delivery overview<span class="heading-dot">.</span></h1><p>One place to see how your webhook pipeline is performing.</p></div><a class="btn btn-outline" href="{{ url_for('dashboard.deliveries') }}">Explore deliveries →</a></header>
+<div class="metric-grid">
+  <section class="metric-card metric-hero"><div class="metric-label">TOTAL DELIVERIES <span>↗</span></div><div class="metric-number">{{ total }}</div><div class="metric-caption">Across all destinations</div><div class="metric-decoration">↗</div></section>
+  <section class="metric-card"><div class="metric-label">SUCCEEDED <span class="status-dot good"></span></div><div class="metric-number">{{ summary['succeeded'] }}</div><div class="metric-caption">Successfully acknowledged</div></section>
+  <section class="metric-card"><div class="metric-label">RETRYING <span class="status-dot warn"></span></div><div class="metric-number">{{ summary['retry'] }}</div><div class="metric-caption">Scheduled for another attempt</div></section>
+  <section class="metric-card"><div class="metric-label">DEAD LETTERS <span class="status-dot bad"></span></div><div class="metric-number">{{ summary['dead'] }}</div><div class="metric-caption">Require your attention</div></section>
+</div>
+<div class="two-column">
+  <section class="panel"><div class="panel-heading"><div><div class="eyebrow">DELIVERY HEALTH</div><h2>Status distribution</h2></div><span class="subtle-tag">ALL TIME</span></div>
+    {% if total %}<div class="success-rate"><span>Success rate</span><strong>{{ (100 * summary['succeeded'] / total)|round(1) }}%</strong></div><progress class="health-progress" value="{{ summary['succeeded'] }}" max="{{ total }}">{{ summary['succeeded'] }} of {{ total }} succeeded</progress>{% else %}<div class="empty-message">No deliveries yet. Create an endpoint and destination to begin.</div>{% endif %}
+    <div class="status-grid">{% for status in ['succeeded','pending','queued','sending','retry','dead'] %}<div class="status-stat"><span class="status-dot {{ 'good' if status == 'succeeded' else 'bad' if status == 'dead' else 'warn' if status == 'retry' else 'neutral' }}"></span><span>{{ status|capitalize }}</span><strong>{{ summary[status] }}</strong></div>{% endfor %}</div>
+  </section>
+  <section class="panel"><div class="panel-heading"><div><div class="eyebrow">CONFIGURATION</div><h2>Connected resources</h2></div></div>
+    <div class="resource"><div class="resource-icon">⌁</div><div><strong>Webhook endpoints</strong><div class="muted small">Incoming signed event sources</div></div><div class="resource-value">{{ endpoints }}</div></div>
+    <div class="resource"><div class="resource-icon">⇢</div><div><strong>Destinations</strong><div class="muted small">Outgoing HTTP callback targets</div></div><div class="resource-value">{{ destinations }}</div></div>
+    <a class="text-link" href="{{ url_for('dashboard.endpoints') }}">Manage integrations →</a>
+  </section>
+</div>
+<section class="panel table-panel"><div class="panel-heading"><div><div class="eyebrow">ACTIVITY FEED</div><h2>Recent deliveries</h2></div><a class="text-link" href="{{ url_for('dashboard.deliveries') }}">View all →</a></div>
+{% if recent %}<div class="table-wrap"><table><thead><tr><th>EVENT</th><th>DESTINATION</th><th>STATUS</th><th>ATTEMPTS</th><th>DETAIL</th></tr></thead><tbody>{% for d in recent %}<tr><td><strong class="mono">{{ d.event.external_id|truncate(40, True) }}</strong><div class="muted small">{{ d.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</div></td><td>{{ d.destination.name }}</td><td><span class="pill pill-{{ d.status }}">{{ d.status }}</span></td><td>{{ d.attempt_count }} / {{ d.max_attempts }}</td><td><a class="table-link" href="{{ url_for('dashboard.delivery_detail', delivery_id=d.id) }}">Details ↗</a></td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty-message">No delivery activity has been recorded yet.</div>{% endif %}
+</section>
+{% endblock %}

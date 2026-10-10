@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>{% block title %}Dashboard{% endblock %} · HookRelay</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="{{ url_for('dashboard.overview') }}"><span class="brand-mark">↗</span> <span>hook<span class="brand-accent">relay</span><small>OPERATIONS CONSOLE</small></span></a>
+      <div class="nav-label">WORKSPACE</div>
+      <nav aria-label="Primary">
+        <a class="nav-link {{ 'selected' if active == 'overview' else '' }}" href="{{ url_for('dashboard.overview') }}"><span aria-hidden="true">▦</span> Overview</a>
+        <a class="nav-link {{ 'selected' if active == 'deliveries' else '' }}" href="{{ url_for('dashboard.deliveries') }}"><span aria-hidden="true">⇄</span> Deliveries</a>
+        <a class="nav-link {{ 'selected' if active == 'endpoints' else '' }}" href="{{ url_for('dashboard.endpoints') }}"><span aria-hidden="true">⌁</span> Endpoints &amp; targets</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="env"><span class="pulse"></span> Local admin workspace</div>
+        <form method="post" action="{{ url_for('dashboard.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ session['dashboard_csrf'] }}">
+          <button class="signout" type="submit">Sign out <span aria-hidden="true">→</span></button>
+        </form>
+        <div class="side-note">Flask · PostgreSQL · Celery</div>
+      </div>
+    </aside>
+    <main class="main-content">
+      <div class="topbar"><span>CONTROL CENTER <span class="slash">/</span> {% block crumb %}OVERVIEW{% endblock %}</span><a href="{{ url_for('api.api_documentation') }}">API reference ↗</a></div>
+      {% block body %}{% endblock %}
+      <footer class="footer">HookRelay v0.1 · At-least-once webhook delivery <span>Data from your configured database</span></footer>
+    </main>
+  </div>
+</body>
+</html>

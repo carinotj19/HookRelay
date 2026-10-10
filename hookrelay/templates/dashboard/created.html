@@ -1,0 +1,6 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}{{ kind }} created{% endblock %}{% block crumb %}INTEGRATIONS / CREATED{% endblock %}
+{% block body %}
+<header class="page-heading"><div><div class="eyebrow">RESOURCE CREATED</div><h1>{{ kind }} ready<span class="heading-dot">.</span></h1><p>{{ name }} is now registered with HookRelay.</p></div><a class="btn btn-outline" href="{{ url_for('dashboard.endpoints') }}">← Back to integrations</a></header>
+<section class="panel secret-panel"><div class="success-banner">✓ Successfully created <strong>{{ name }}</strong></div><div class="eyebrow">{{ identifier_label|upper }}</div><div class="secret-value mono break-word">{{ identifier }}</div><div class="eyebrow">{{ 'INGESTION PATH' if kind == 'Endpoint' else 'CALLBACK URL' }}</div><div class="secret-value mono break-word">{{ detail }}</div><div class="subtle-divider"></div><div class="secret-warning">⚠ Save this signing secret now. For your safety, HookRelay will not display it again.</div><div class="eyebrow">SIGNING SECRET — SHOWN ONCE</div><div class="secret-value mono break-word">{{ signing_secret }}</div></section>
+{% endblock %}

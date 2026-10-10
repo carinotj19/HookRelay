@@ -14,7 +14,9 @@ def create_app(test_config: dict | None = None) -> Flask:
         raise RuntimeError("ADMIN_API_KEY must be configured")
     db.init_app(app)
     from .routes import bp
+    from .dashboard import bp as dashboard_bp
     app.register_blueprint(bp)
+    app.register_blueprint(dashboard_bp)
 
     @app.errorhandler(HTTPException)
     def handle_http_error(error):

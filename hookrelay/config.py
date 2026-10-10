@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 
 class Config:
@@ -15,3 +16,10 @@ class Config:
     DISPATCH_BATCH_SIZE = 100
     DELIVERY_TIMEOUT_SECONDS = 10
     ALLOW_PRIVATE_DESTINATIONS = os.getenv("ALLOW_PRIVATE_DESTINATIONS", "0") == "1"
+
+    # Web dashboard stays disabled until a stable 32+ character secret is set.
+    SECRET_KEY = os.getenv("DASHBOARD_SESSION_SECRET")
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Strict"
+    SESSION_COOKIE_SECURE = os.getenv("DASHBOARD_COOKIE_SECURE", "0") == "1"
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=45)
