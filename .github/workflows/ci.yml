@@ -17,6 +17,8 @@ jobs:
       - run: pytest --cov=hookrelay --cov-report=term-missing
         env:
           ADMIN_API_KEY: ci-test-key
+      - name: Docker-free HTTP reliability demo
+        run: python -m hookrelay.reliability_demo
 
   postgres-integration:
     runs-on: ubuntu-latest

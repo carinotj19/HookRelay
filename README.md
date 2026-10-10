@@ -32,7 +32,24 @@ The important boundary is **commit before enqueue**. Flask can accept a webhook 
 | Dead letters | Terminal `dead` status, preserved attempts and error summaries |
 | Replay | Creates a *new* delivery linked via `replay_of_id`; originals and attempt histories remain unchanged |
 | Operations | Health routes, authenticated JSON endpoints, event/attempt list, delivery status filters, summary counts |
-| CI | pytest and coverage in GitHub Actions |
+| CI | pytest, coverage, real-PostgreSQL integration, and a Docker-free reliability smoke demo in GitHub Actions |
+
+## Verify reliability without Docker (Windows, macOS, Linux)
+
+**No PostgreSQL, Redis, Celery worker, or Docker installation is needed** for this verified local demonstration. It creates an isolated temporary SQLite database, uses the actual Flask API and delivery code, and sends signed HTTP requests to a short-lived receiver on `127.0.0.1`.
+
+```powershell
+# PowerShell, from the repository root
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[test]"
+python -m pytest --cov=hookrelay -v --basetemp=.\.pytest-tmp
+python -m hookrelay.reliability_demo
+```
+
+The demo prints verified checkpoints for signed ingestion + duplicate/conflicting IDs, real HTTP 503→retry→204, dead-letter exhaustion and replay, expired worker lease fencing, and HMAC-authenticated outbound requests. Retry due-times are advanced **inside the temporary demo database** so the demo can run quickly without waiting for backoff.
+
+**Scope:** This verifies the Flask/API/SQLAlchemy/HTTP delivery behavior and task wrappers (Celery eager mode in tests). It is **not** a live Redis/Celery-worker run or proof of PostgreSQL concurrency. Real PostgreSQL migration, competing dispatcher, broker failure, lease recovery, and replay tests run in the separate GitHub Actions `postgres-integration` job. A real distributed outage test remains future work.
 
 ## Run locally (Docker)
 
@@ -99,7 +116,7 @@ pip install -e '.[test]'
 pytest --cov=hookrelay
 ```
 
-Tests create an isolated SQLite database for fast deterministic execution. **SQLite is not a substitute for PostgreSQL concurrency testing** (`SKIP LOCKED` is PostgreSQL-specific). Extend CI with concurrent real-Postgres workers and failure-injection tests before calling this production ready.
+Tests create an isolated SQLite database for fast deterministic execution. **SQLite is not a substitute for PostgreSQL concurrency testing** (`SKIP LOCKED` is PostgreSQL-specific). GitHub Actions also runs real PostgreSQL migration, concurrency and failure-injection integration tests. Full broker/worker-process outage tests are still needed before calling this production ready.
 
 ## Reliability contract and limitations
 
@@ -112,7 +129,7 @@ Tests create an isolated SQLite database for fast deterministic execution. **SQL
 
 ## Next milestones
 
-1. Postgres integration tests (competing dispatchers, broker outage, duplicate worker delivery) and chaos scripts.
+1. Full Redis/Celery broker + worker-process outage tests (including crash after consumer accepts request), plus safe DNS-pinned egress.
 2. Multi-tenant account and token lifecycle, audit trails, safe callback URL egress policy.
 3. Prometheus metrics/OpenTelemetry tracing, dashboard with filters and attempt timelines.
 4. Scalable leased-dispatch scheduling, rate-limits, circuit breakers, backpressure, retention.
