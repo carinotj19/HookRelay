@@ -9,7 +9,7 @@ from hookrelay import models  # noqa: F401 -- register mapped tables
 config = context.config
 app = create_app()
 with app.app_context():
-    database_url = str(db.engine.url).replace("%", "%%")
+    database_url = db.engine.url.render_as_string(hide_password=False).replace("%", "%%")
     config.set_main_option("sqlalchemy.url", database_url)
 
 target_metadata = db.metadata
