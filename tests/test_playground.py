@@ -18,7 +18,7 @@ def _admin(app, client, base=None):
     response = client.post("/dashboard/login", data={"admin_key": "local-test-key"},
                            base_url=base or "http://localhost")
     assert response.status_code == 303
-    with client.session_transaction() as sess:
+    with client.session_transaction(base_url=base or "http://localhost") as sess:
         return sess["dashboard_csrf"]
 
 
