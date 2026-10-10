@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8,<10", "pytest-cov>=6,<8"]
+test = ["pytest>=8,<10", "pytest-cov>=6,<8", "openapi-spec-validator>=0.7,<1"]
 
 [tool.setuptools.packages.find]
 include = ["hookrelay*"]
@@ -27,3 +27,6 @@ include = ["hookrelay*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.setuptools.package-data]
+hookrelay = ["static/*.json", "templates/*.html"]

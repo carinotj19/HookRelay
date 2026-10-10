@@ -3,7 +3,7 @@ import json
 import secrets
 from functools import wraps
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, current_app, jsonify, render_template, request
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.sql import func, text
@@ -13,6 +13,18 @@ from .models import Delivery, DeliveryAttempt, Destination, Endpoint, Event
 from .security import generate_secret, validate_destination_url, verify
 
 bp = Blueprint("api", __name__)
+
+
+@bp.get("/openapi.json")
+def openapi_spec():
+    """Public, versioned API contract; never contains runtime credentials."""
+    return current_app.send_static_file("openapi.json")
+
+
+@bp.get("/docs")
+def api_documentation():
+    """Interactive Swagger UI; the browser loads its assets from a CDN."""
+    return render_template("docs.html")
 
 
 def admin_only(fn):

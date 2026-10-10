@@ -1,0 +1,1241 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "HookRelay API",
+    "version": "0.1.0",
+    "description": "Durable signed webhook ingestion and at-least-once HTTP delivery. This contract describes the Flask API, not a hosted public demo. Admin operations use a bearer token; webhook ingestion uses per-endpoint HMAC. Secrets are never exposed through list endpoints."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Same Flask host as this documentation"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Liveness and database readiness"
+    },
+    {
+      "name": "Endpoints",
+      "description": "Register and inspect incoming webhook sources"
+    },
+    {
+      "name": "Destinations",
+      "description": "Register and inspect outbound callback targets"
+    },
+    {
+      "name": "Ingestion",
+      "description": "Receive externally signed JSON events"
+    },
+    {
+      "name": "Events",
+      "description": "Audit received events"
+    },
+    {
+      "name": "Deliveries",
+      "description": "Inspect and replay webhook deliveries"
+    },
+    {
+      "name": "Statistics",
+      "description": "Delivery status counts"
+    }
+  ],
+  "paths": {
+    "/health/live": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "operationId": "getLiveness",
+        "summary": "Liveness probe",
+        "description": "Indicates that the Flask process is running; does not check database or broker health.",
+        "responses": {
+          "200": {
+            "description": "API process is alive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "operationId": "getReadiness",
+        "summary": "Database readiness probe",
+        "description": "Executes SELECT 1 on the configured database; does not test Redis/Celery availability.",
+        "responses": {
+          "200": {
+            "description": "Database reachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/endpoints": {
+      "post": {
+        "tags": [
+          "Endpoints"
+        ],
+        "operationId": "createEndpoint",
+        "summary": "Create webhook source",
+        "description": "Registers an inbound endpoint and returns its signing secret **once**. Use the secret to authenticate incoming events.",
+        "responses": {
+          "201": {
+            "description": "Endpoint created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointCreated"
+                },
+                "example": {
+                  "id": "11111111-1111-4111-8111-111111111111",
+                  "name": "billing-events",
+                  "public_key": "demo_public_key",
+                  "signing_secret": "example-secret-not-real",
+                  "ingest_path": "/hooks/demo_public_key"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid admin bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AdminBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndpointCreate"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Endpoints"
+        ],
+        "operationId": "listEndpoints",
+        "summary": "List webhook sources",
+        "description": "Lists active and disabled endpoints without exposing signing secrets.",
+        "responses": {
+          "200": {
+            "description": "Endpoints",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Endpoint"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "11111111-1111-4111-8111-111111111111",
+                      "name": "billing-events",
+                      "public_key": "demo_public_key",
+                      "active": true
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid admin bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AdminBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/destinations": {
+      "post": {
+        "tags": [
+          "Destinations"
+        ],
+        "operationId": "createDestination",
+        "summary": "Create callback destination",
+        "description": "A destination receives signed HTTP POST requests once an endpoint ingests an event. Outbound signing secret appears **only** in this response.",
+        "responses": {
+          "201": {
+            "description": "Destination created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DestinationCreated"
+                },
+                "example": {
+                  "id": "22222222-2222-4222-8222-222222222222",
+                  "endpoint_id": "11111111-1111-4111-8111-111111111111",
+                  "url": "https://example.org/webhooks",
+                  "signing_secret": "example-secret-not-real"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, name, or URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown endpoint_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid admin bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AdminBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DestinationCreate"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Destinations"
+        ],
+        "operationId": "listDestinations",
+        "summary": "List callback destinations",
+        "description": "Returns destination metadata, without signing secrets.",
+        "responses": {
+          "200": {
+            "description": "Destinations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Destination"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "22222222-2222-4222-8222-222222222222",
+                      "endpoint_id": "11111111-1111-4111-8111-111111111111",
+                      "name": "analytics",
+                      "url": "https://example.org/webhooks",
+                      "active": true
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid admin bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AdminBearer": []
+          }
+        ]
+      }
+    },
+    "/hooks/{public_key}": {
+      "post": {
+        "tags": [
+          "Ingestion"
+        ],
+        "operationId": "ingestEvent",
+        "summary": "Ingest signed event",
+        "description": "Send raw JSON bytes with X-HookRelay-Event-Id and a signature `t=<unix_seconds>,v1=<sha256_hex>`. Sign the UTF-8 bytes `str(timestamp) + \".\" + raw_body` using HMAC-SHA256 and the **endpoint signing secret**, then hex-encode the digest. The timestamp must be within 300 seconds (configurable). See README for a Python signing example. Swagger UI cannot automatically calculate this HMAC for an edited JSON body: compute the header externally and paste it here.\n\n**Idempotency:** 202 for a new event committed with destination outbox rows; 200 for the same event ID *and identical raw bytes*; 409 for same event ID with different raw bytes. HTTP delivery is at least once, not exactly once.",
+        "responses": {
+          "202": {
+            "description": "New event committed and scheduled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResult"
+                },
+                "example": {
+                  "event_id": "33333333-3333-4333-8333-333333333333",
+                  "duplicate": false,
+                  "deliveries": 1
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Previously ingested identical event",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResult"
+                },
+                "example": {
+                  "event_id": "33333333-3333-4333-8333-333333333333",
+                  "duplicate": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing event ID or invalid JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or expired HMAC signature",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown or disabled source",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Same event ID, different raw payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload exceeds 256 KiB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Content-Type is not application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "WebhookHMAC": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "public_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-HookRelay-Event-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "description": "Client-supplied event id, unique per source."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "Any valid JSON value. Signature is calculated over the precise raw request bytes; whitespace changes matter.",
+                "example": {
+                  "type": "invoice.paid",
+                  "invoice_id": "inv_123"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "operationId": "listEvents",
+        "summary": "List ingested events",
+        "description": "Returns metadata and SHA-256 digests, not payload bodies.",
+        "responses": {
+          "200": {
+            "description": "Recent events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Event"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid admin bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AdminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            },
+            "description": "Default 30; values are clamped to the range 1–100."
+          }
+        ]
+      }
+    },
+    "/api/v1/deliveries": {
+      "get": {
+        "tags": [
+          "Deliveries"
+        ],
+        "operationId": "listDeliveries",
+        "summary": "List deliveries",
+        "description": "Inspect delivery status, retries, last error, and replay lineage.",
+        "responses": {
+          "200": {
+            "description": "Recent deliveries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Delivery"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "44444444-4444-4444-8444-444444444444",
+                      "event_id": "33333333-3333-4333-8333-333333333333",
+                      "destination_id": "22222222-2222-4222-8222-222222222222",
+                      "status": "retry",
+                      "attempt_count": 1,
+                      "max_attempts": 5,
+                      "last_error": "HTTP 503",
+                      "replay_of_id": null,
+                      "next_attempt_at": "2026-10-10T12:00:00Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid status filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid admin bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AdminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            },
+            "description": "Default 30; values are clamped to the range 1–100."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "queued",
+                "sending",
+                "retry",
+                "succeeded",
+                "dead"
+              ]
+            },
+            "description": "Filter to one delivery state."
+          }
+        ]
+      }
+    },
+    "/api/v1/deliveries/{delivery_id}/attempts": {
+      "get": {
+        "tags": [
+          "Deliveries"
+        ],
+        "operationId": "listDeliveryAttempts",
+        "summary": "List delivery attempts",
+        "description": "Returns persisted HTTP status, duration, and errors in attempt order. Crashes before recording an attempt cannot be seen in this list.",
+        "responses": {
+          "200": {
+            "description": "Attempts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DeliveryAttempt"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "number": 1,
+                      "status_code": 503,
+                      "error": "HTTP 503",
+                      "duration_ms": 142,
+                      "created_at": "2026-10-10T11:59:40Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown delivery ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid admin bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AdminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Delivery UUID"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/deliveries/{delivery_id}/replay": {
+      "post": {
+        "tags": [
+          "Deliveries"
+        ],
+        "operationId": "replayDelivery",
+        "summary": "Replay terminal delivery",
+        "description": "Creates a **new** pending delivery linked to the original. Allowed only when original status is `dead` or `succeeded` and destination remains active. Replay uses the original event payload and a new delivery ID; the receiver must deduplicate by event semantics if needed.",
+        "responses": {
+          "202": {
+            "description": "Replay enqueued into durable outbox",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "delivery"
+                  ],
+                  "properties": {
+                    "delivery": {
+                      "$ref": "#/components/schemas/Delivery"
+                    }
+                  }
+                },
+                "example": {
+                  "delivery": {
+                    "id": "44444444-4444-4444-8444-444444444444",
+                    "event_id": "33333333-3333-4333-8333-333333333333",
+                    "destination_id": "22222222-2222-4222-8222-222222222222",
+                    "status": "pending",
+                    "attempt_count": 0,
+                    "max_attempts": 5,
+                    "last_error": null,
+                    "replay_of_id": "55555555-5555-4555-8555-555555555555",
+                    "next_attempt_at": "2026-10-10T12:00:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown delivery ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Delivery is not terminal or destination is disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid admin bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AdminBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "delivery_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Delivery UUID"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/stats": {
+      "get": {
+        "tags": [
+          "Statistics"
+        ],
+        "operationId": "getStats",
+        "summary": "Delivery summary",
+        "description": "Count records by status; omitted statuses have zero records.",
+        "responses": {
+          "200": {
+            "description": "Count by delivery state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stats"
+                },
+                "example": {
+                  "deliveries": {
+                    "pending": 2,
+                    "succeeded": 18,
+                    "dead": 1
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid admin bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AdminBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "AdminBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API key",
+        "description": "ADMIN_API_KEY environment variable. Enter the token in Swagger's Authorize dialog; do not include the `Bearer` prefix."
+      },
+      "WebhookHMAC": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-HookRelay-Signature",
+        "description": "HMAC-SHA256 header in format t=<timestamp>,v1=<hex>. This header must be recomputed over the exact raw request body. Swagger UI can send but not generate the signature."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "unauthorized"
+          },
+          "message": {
+            "type": "string",
+            "description": "Present for Flask HTTP exceptions."
+          }
+        }
+      },
+      "EndpointCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "example": "billing-events"
+          }
+        }
+      },
+      "EndpointCreated": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "public_key",
+          "signing_secret",
+          "ingest_path"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "billing-events"
+          },
+          "public_key": {
+            "type": "string",
+            "example": "sample_public_key"
+          },
+          "signing_secret": {
+            "type": "string",
+            "description": "Returned only on creation. Store securely; never commit to source control."
+          },
+          "ingest_path": {
+            "type": "string",
+            "example": "/hooks/sample_public_key"
+          }
+        }
+      },
+      "Endpoint": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "public_key",
+          "active"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "public_key": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DestinationCreate": {
+        "type": "object",
+        "required": [
+          "name",
+          "endpoint_id",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "example": "analytics"
+          },
+          "endpoint_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://example.org/webhooks",
+            "description": "HTTPS required by default; local/private HTTP only when ALLOW_PRIVATE_DESTINATIONS=1 (unsafe outside controlled development)."
+          }
+        }
+      },
+      "DestinationCreated": {
+        "type": "object",
+        "required": [
+          "id",
+          "endpoint_id",
+          "url",
+          "signing_secret"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "endpoint_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "signing_secret": {
+            "type": "string",
+            "description": "Returned only once on creation. Used to sign outgoing deliveries."
+          }
+        }
+      },
+      "Destination": {
+        "type": "object",
+        "required": [
+          "id",
+          "endpoint_id",
+          "name",
+          "url",
+          "active"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "endpoint_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Event": {
+        "type": "object",
+        "required": [
+          "id",
+          "endpoint_id",
+          "external_id",
+          "payload_sha256",
+          "received_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "endpoint_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "payload_sha256": {
+            "type": "string",
+            "description": "SHA-256 digest of original raw request bytes."
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Delivery": {
+        "type": "object",
+        "required": [
+          "id",
+          "event_id",
+          "destination_id",
+          "status",
+          "attempt_count",
+          "max_attempts",
+          "last_error",
+          "replay_of_id",
+          "next_attempt_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "destination_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "queued",
+              "sending",
+              "retry",
+              "succeeded",
+              "dead"
+            ]
+          },
+          "attempt_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "max_attempts": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "last_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "replay_of_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "next_attempt_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "DeliveryAttempt": {
+        "type": "object",
+        "required": [
+          "number",
+          "status_code",
+          "error",
+          "duration_ms",
+          "created_at"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status_code": {
+            "type": "integer",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "IngestResult": {
+        "type": "object",
+        "required": [
+          "event_id",
+          "duplicate"
+        ],
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "duplicate": {
+            "type": "boolean"
+          },
+          "deliveries": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Present for new ingestions (202), not exact duplicates (200)."
+          }
+        }
+      },
+      "Stats": {
+        "type": "object",
+        "required": [
+          "deliveries"
+        ],
+        "properties": {
+          "deliveries": {
+            "type": "object",
+            "description": "Count by delivery state; zero-count states are omitted.",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "example": {
+              "pending": 2,
+              "succeeded": 18,
+              "dead": 1
+            }
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "ready",
+              "unavailable"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
