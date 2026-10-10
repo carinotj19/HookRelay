@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hookrelay"
+version = "0.1.0"
+description = "Durable, signed, at-least-once webhook delivery service"
+requires-python = ">=3.11"
+dependencies = [
+  "Flask>=3.1,<4",
+  "Flask-SQLAlchemy>=3.1,<4",
+  "SQLAlchemy>=2.0,<3",
+  "alembic>=1.14,<2",
+  "psycopg[binary]>=3.2,<4",
+  "celery[redis]>=5.5,<6",
+  "requests>=2.32,<3",
+  "gunicorn>=23,<25",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10", "pytest-cov>=6,<8"]
+
+[tool.setuptools.packages.find]
+include = ["hookrelay*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
