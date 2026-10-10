@@ -1,0 +1,13 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Deliveries{% endblock %}{% block crumb %}DELIVERIES{% endblock %}
+{% block body %}
+<header class="page-heading"><div><div class="eyebrow">DELIVERY EXPLORER</div><h1>Delivery history<span class="heading-dot">.</span></h1><p>Trace every attempt, troubleshoot failures, and replay completed events.</p></div><span class="count-badge">{{ count }} matching records</span></header>
+<section class="panel table-panel"><form class="filter-bar" method="get" action="{{ url_for('dashboard.deliveries') }}">
+  <div class="filter-field search-box"><label for="search">SEARCH</label><input id="search" name="search" value="{{ search }}" placeholder="Event ID or destination name" maxlength="100"></div>
+  <div class="filter-field"><label for="status">STATUS</label><select name="status" id="status"><option value="">All statuses</option>{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s|capitalize }}</option>{% endfor %}</select></div>
+  <button class="btn btn-primary" type="submit">Apply filters</button><a class="btn btn-text" href="{{ url_for('dashboard.deliveries') }}">Clear</a>
+</form>
+{% if rows %}<div class="table-wrap"><table><thead><tr><th>EVENT ID</th><th>DESTINATION</th><th>STATUS</th><th>ATTEMPTS</th><th>CREATED (UTC)</th><th></th></tr></thead><tbody>{% for d in rows %}<tr><td class="mono"><strong>{{ d.event.external_id|truncate(40, True) }}</strong></td><td>{{ d.destination.name }}</td><td><span class="pill pill-{{ d.status }}">{{ d.status }}</span></td><td>{{ d.attempt_count }} / {{ d.max_attempts }}</td><td class="muted small">{{ d.created_at.strftime('%b %d, %Y · %H:%M') }}</td><td><a class="table-link" href="{{ url_for('dashboard.delivery_detail', delivery_id=d.id) }}">Inspect ↗</a></td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty-message">No deliveries match these filters.</div>{% endif %}
+<div class="pagination"><div>Page {{ page }} of {{ pages }} · Showing up to {{ rows|length }} records</div><div class="page-buttons">{% if page > 1 %}<a class="btn btn-outline" href="{{ url_for('dashboard.deliveries', status=status, search=search, page=page-1) }}">← Previous</a>{% endif %}{% if page < pages %}<a class="btn btn-outline" href="{{ url_for('dashboard.deliveries', status=status, search=search, page=page+1) }}">Next →</a>{% endif %}</div></div>
+</section>
+{% endblock %}

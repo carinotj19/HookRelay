@@ -1,6 +1,6 @@
 # HookRelay
 
-**A durable webhook ingestion and delivery platform, built with Python and Flask.** A portfolio project showcasing failure-aware API design: HMAC verification, idempotent ingestion, a PostgreSQL outbox, async Celery delivery, exponential backoff, dead-letter state, auditable attempts, and manual replay.
+**A durable webhook ingestion and delivery platform, built with Python and Flask.** A portfolio project showcasing failure-aware API design: HMAC verification, idempotent ingestion, a PostgreSQL outbox, async Celery delivery, exponential backoff, dead-letter state, auditable attempts, manual replay, and a server-rendered Flask operations dashboard.
 
 > **Guarantee:** at-least-once attempts, not exactly-once delivery. Receiving systems must deduplicate using `X-HookRelay-Delivery-Id` (for attempts within a delivery) or their own event semantics. Replays intentionally get a new delivery ID but keep the same event ID.
 
@@ -16,7 +16,7 @@ flowchart LR
   R --> W[Celery workers]
   W -->|signed HTTP POST| C[Consumer]
   W -->|attempts and next due time| PG
-  A[Admin API] -->|inspect / replay| PG
+  A[Admin API and dashboard] -->|inspect / replay| PG
 ```
 
 The important boundary is **commit before enqueue**. Flask can accept a webhook while Redis is down. The periodic dispatcher finds committed `pending`/`retry` records and expired `queued`/`sending` leases. PostgreSQL `FOR UPDATE SKIP LOCKED` prevents dispatchers from claiming the same row simultaneously. Worker fencing tokens prevent stale tasks from updating newer state.
@@ -32,6 +32,7 @@ The important boundary is **commit before enqueue**. Flask can accept a webhook 
 | Dead letters | Terminal `dead` status, preserved attempts and error summaries |
 | Replay | Creates a *new* delivery linked via `replay_of_id`; originals and attempt histories remain unchanged |
 | Operations | Health routes, authenticated JSON endpoints, event/attempt list, delivery status filters, summary counts |
+| Dashboard | Flask/Jinja server-rendered overview, signed admin login, filterable delivery history, attempt timelines, replay forms, endpoint/destination creation |
 | CI | pytest and coverage on Linux and Windows, real-PostgreSQL integration, and a Docker-free reliability smoke demo in GitHub Actions |
 
 ## Verify reliability without Docker (Windows, macOS, Linux)
@@ -127,13 +128,13 @@ Tests create an isolated SQLite database for fast deterministic execution. **SQL
 - The dispatcher retries expired worker leases and lost broker publishes. Keep the lease longer than HTTP timeout; production deployments must constrain worker execution time as well.
 - Every callback attempt has an immutable attempt record while its delivery retains status and schedule. Crash-before-record attempts are not observable locally, even though the receiver may have seen the call.
 - Payload bytes are preserved so delivery signatures refer to the original bytes. Secrets and payloads reside in the database; this initial implementation assumes a trusted single-admin environment.
-- This starter deliberately omits UI, multi-tenancy, encrypted secrets, per-destination rate limiting, DNS-pinned SSRF defenses, metrics exporters, and retention jobs. They're follow-on milestones, not claimed features.
+- This starter deliberately omits multi-tenancy, encrypted secrets, per-destination rate limiting, DNS-pinned SSRF defenses, metrics exporters, and retention jobs. They're follow-on milestones, not claimed features.
 
 ## Next milestones
 
 1. Full Redis/Celery broker + worker-process outage tests (including crash after consumer accepts request), plus safe DNS-pinned egress.
 2. Multi-tenant account and token lifecycle, audit trails, safe callback URL egress policy.
-3. Prometheus metrics/OpenTelemetry tracing, dashboard with filters and attempt timelines.
+3. Prometheus metrics/OpenTelemetry tracing and live-updating dashboard visualization.
 4. Scalable leased-dispatch scheduling, rate-limits, circuit breakers, backpressure, retention.
 
 **Portfolio talking point:** explain why an outbox in PostgreSQL closes the DB→broker loss window, why leases recover worker crashes, and why replay needs separate audit history. These are the hard parts—not merely returning HTTP 200.
@@ -164,3 +165,28 @@ In Swagger UI, use **Authorize** to enter the `ADMIN_API_KEY` token (not the lit
 **Signed ingress:** To exercise `POST /hooks/{public_key}` you must calculate `X-HookRelay-Signature` over the **exact bytes** Swagger UI will send. The browser cannot automatically sign an edited request body. The Python signing example above is the most reliable way to send a signed event. The `X-HookRelay-Event-Id` header is required, and only identical repeated raw payloads with the same ID are deduplicated.
 
 **Important:** `/docs` and `/openapi.json` are deliberately public reference pages, not live demo credentials. Swagger UI loads JavaScript and CSS from jsDelivr, so the browser needs internet access and you should not enter production admin tokens into an unreviewed deployment. For the actual worker pipeline, Redis/Celery and PostgreSQL are still recommended; this local SQLite server demonstrates HTTP API operations but **will not deliver queued webhooks automatically** without a running dispatcher and worker. Use `python -m hookrelay.reliability_demo` for a Docker-free signed HTTP delivery and recovery demonstration.
+
+
+## Operations dashboard — no Docker required
+
+HookRelay includes a small **Flask/Jinja dashboard** at **`/dashboard`**. It uses server-side queries and HTML templates (no React, Node, or frontend build tooling), with an overview of delivery states, resource counts, searchable/filterable paginated delivery records, attempt timelines, terminal delivery replay, and endpoint/destination registration. The existing JSON API continues to require a bearer token independently of dashboard sessions.
+
+**Windows PowerShell quick start** (this assumes you already installed HookRelay and have a local SQLite schema from the Swagger walkthrough):
+
+```powershell
+# Stop the existing Flask dev server with Ctrl+C first, then:
+git fetch origin
+git switch feat/delivery-monitoring-dashboard
+python -m pip install -e ".[test]"
+$env:ADMIN_API_KEY = "local-demo-key-replace-me"
+$env:DATABASE_URL = "sqlite:///hookrelay-docs.db"
+$env:DASHBOARD_SESSION_SECRET = python -c "import secrets; print(secrets.token_hex(32))"
+python -m alembic upgrade head
+python -m flask --app hookrelay run --host 127.0.0.1 --port 8000
+```
+
+Open **http://127.0.0.1:8000/dashboard** in your browser and sign in with the `ADMIN_API_KEY` value. To reuse the earlier `Portfolio Demo` endpoint from Swagger, keep the same `DATABASE_URL` (Flask stores relative SQLite paths in its instance directory). Swagger UI remains available at `/docs`. If you use a different database or have no delivery records, the dashboard correctly shows empty states; **a bare Flask development server does not start Redis or Celery**. Run `python -m hookrelay.reliability_demo` independently for a Docker-free end-to-end signed HTTP demonstration (it uses its own isolated database and doesn't populate your dashboard).
+
+**Session and security model:** The dashboard refuses to start without a separate, stable, **32+ character** `DASHBOARD_SESSION_SECRET`. Generate and save a strong secret in your deployment environment; a new secret invalidates all sessions. It never stores the raw admin key in the session. It uses a signed, HttpOnly, SameSite=Strict cookie with a 45-minute expiration and requires CSRF tokens for mutation and logout forms. HTML responses disable browser caching and framing. Creation pages reveal signing secrets once with no-store headers. Set `DASHBOARD_COOKIE_SECURE=1` behind HTTPS, require HTTPS for remote access, and keep `/dashboard` private. This is a **single-admin portfolio console**: it does not yet offer individual accounts, MFA, login rate limits, an operator audit trail, or RBAC. Do not expose it to the public internet as a multi-user SaaS service.
+
+**Developer tests:** `python -m pytest tests/test_dashboard.py -v --basetemp=./.pytest-tmp` exercises authorization isolation, CSRF, key rotation, secret visibility, forms, status/search filters, pagination, attempt history and replay. Linux, Windows, and PostgreSQL CI checks continue to run automatically.

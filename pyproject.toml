@@ -29,4 +29,4 @@ testpaths = ["tests"]
 addopts = "-q"
 
 [tool.setuptools.package-data]
-hookrelay = ["static/*.json", "templates/*.html"]
+hookrelay = ["static/*.json", "static/*.css", "templates/*.html", "templates/dashboard/*.html"]
