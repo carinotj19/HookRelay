@@ -1,5 +1,7 @@
 # HookRelay
 
+[![CI](https://github.com/carinotj19/HookRelay/actions/workflows/ci.yml/badge.svg)](https://github.com/carinotj19/HookRelay/actions/workflows/ci.yml)
+
 A webhook relay built with **Python and Flask**. HookRelay receives signed events, stores them durably, and forwards them to HTTP destinations with retry handling, delivery history, and manual replay.
 
 The project includes a web dashboard, an interactive API reference, and a local playground for testing webhook failures without setting up a message broker.
@@ -13,6 +15,18 @@ The project includes a web dashboard, an interactive API reference, and a local 
 - **Dead-letter replay** — retry terminal deliveries without losing their original audit history.
 - **Admin dashboard and API** — manage endpoints, inspect deliveries, and explore the API with Swagger UI.
 - **Local playground** — simulate successful, failing, and recovered callbacks using real HTTP requests.
+
+## Screenshots
+
+**Dashboard overview**
+
+![HookRelay dashboard showing delivery metrics, status distribution, and integration counts](docs/images/dashboard-overview.webp)
+
+**Local playground: recorded delivery outcomes**
+
+![Delivery audit table with a one-attempt success, a three-attempt recovery, and a five-attempt dead letter](docs/images/playground-deliveries.webp)
+
+The second screenshot shows the dead-letter state before an operator replays it. Both are from a local demonstration, not a hosted production system.
 
 ## Tech stack
 
@@ -29,8 +43,6 @@ The project includes a web dashboard, an interactive API reference, and a local 
 ## Getting started
 
 ### Local development (no Docker)
-
-> **Development branch:** Until the feature pull requests are merged into `main`, run `git switch feat/local-delivery-playground` after cloning. The default branch does not yet contain the application.
 
 The dashboard, API, and interactive playground can run with **Python and SQLite**. This is the quickest way to explore HookRelay; it does not start the production Celery/Redis worker pipeline.
 
