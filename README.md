@@ -32,7 +32,7 @@ The important boundary is **commit before enqueue**. Flask can accept a webhook 
 | Dead letters | Terminal `dead` status, preserved attempts and error summaries |
 | Replay | Creates a *new* delivery linked via `replay_of_id`; originals and attempt histories remain unchanged |
 | Operations | Health routes, authenticated JSON endpoints, event/attempt list, delivery status filters, summary counts |
-| CI | pytest, coverage, real-PostgreSQL integration, and a Docker-free reliability smoke demo in GitHub Actions |
+| CI | pytest and coverage on Linux and Windows, real-PostgreSQL integration, and a Docker-free reliability smoke demo in GitHub Actions |
 
 ## Verify reliability without Docker (Windows, macOS, Linux)
 
@@ -46,6 +46,8 @@ python -m pip install -e ".[test]"
 python -m pytest --cov=hookrelay -v --basetemp=.\.pytest-tmp
 python -m hookrelay.reliability_demo
 ```
+
+The demo explicitly disposes its SQLite database connection pool before deleting the temporary files (needed for Windows). CI also runs the no-Docker test suite and HTTP demo on `windows-latest` to detect platform-specific regressions.
 
 The demo prints verified checkpoints for signed ingestion + duplicate/conflicting IDs, real HTTP 503→retry→204, dead-letter exhaustion and replay, expired worker lease fencing, and HMAC-authenticated outbound requests. Retry due-times are advanced **inside the temporary demo database** so the demo can run quickly without waiting for backoff.
 

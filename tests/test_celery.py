@@ -4,13 +4,17 @@ This verifies task wiring, not Redis acknowledgement or worker-crash behavior.
 """
 from types import SimpleNamespace
 
+from hookrelay.config import Config
 from hookrelay.extensions import db
 from hookrelay.models import Delivery, DeliveryAttempt
 from test_api import ingest
 
 
 def test_eager_celery_dispatch_and_worker(app, client, configured, monkeypatch):
-    monkeypatch.setenv("ADMIN_API_KEY", "test-worker-import-key")
+    # Config captures environment variables when its module is imported, not
+    # when celery_app imports it. Patch the config value itself so this test
+    # works in local Windows shells without a preconfigured ADMIN_API_KEY.
+    monkeypatch.setattr(Config, "ADMIN_API_KEY", "test-worker-import-key")
     from hookrelay import celery_app as worker
 
     monkeypatch.setattr(worker, "flask_app", app)

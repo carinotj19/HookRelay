@@ -157,9 +157,18 @@ def run_demo(output=print):
             output("PASS all 8 outbound requests carried valid HMAC signatures")
             output("\nLocal reliability demo completed. Redis/Celery broker and PostgreSQL concurrency are not exercised.")
         finally:
-            receiver.shutdown()
-            receiver.server_close()
-            thread.join(timeout=3)
+            try:
+                receiver.shutdown()
+                receiver.server_close()
+                thread.join(timeout=3)
+            finally:
+                # Flask-SQLAlchemy's scoped session may be removed at the end of
+                # each request, but its engine still holds pooled SQLite file
+                # connections. Windows cannot delete the demo database until
+                # those connections are closed.
+                with app.app_context():
+                    db.session.remove()
+                    db.engine.dispose()
 
 
 if __name__ == "__main__":
