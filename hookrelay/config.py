@@ -17,6 +17,8 @@ class Config:
     DELIVERY_TIMEOUT_SECONDS = 10
     ALLOW_PRIVATE_DESTINATIONS = os.getenv("ALLOW_PRIVATE_DESTINATIONS", "0") == "1"
 
+    LOCAL_PLAYGROUND_ENABLED = os.getenv("LOCAL_PLAYGROUND_ENABLED", "0") == "1"
+
     # Web dashboard stays disabled until a stable 32+ character secret is set.
     SECRET_KEY = os.getenv("DASHBOARD_SESSION_SECRET")
     SESSION_COOKIE_HTTPONLY = True

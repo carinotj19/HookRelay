@@ -17,6 +17,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     from .dashboard import bp as dashboard_bp
     app.register_blueprint(bp)
     app.register_blueprint(dashboard_bp)
+    from .playground import bp as playground_bp
+    app.register_blueprint(playground_bp)
 
     @app.errorhandler(HTTPException)
     def handle_http_error(error):

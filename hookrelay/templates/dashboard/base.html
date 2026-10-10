@@ -16,6 +16,7 @@
         <a class="nav-link {{ 'selected' if active == 'overview' else '' }}" href="{{ url_for('dashboard.overview') }}"><span aria-hidden="true">▦</span> Overview</a>
         <a class="nav-link {{ 'selected' if active == 'deliveries' else '' }}" href="{{ url_for('dashboard.deliveries') }}"><span aria-hidden="true">⇄</span> Deliveries</a>
         <a class="nav-link {{ 'selected' if active == 'endpoints' else '' }}" href="{{ url_for('dashboard.endpoints') }}"><span aria-hidden="true">⌁</span> Endpoints &amp; targets</a>
+        {% if config.LOCAL_PLAYGROUND_ENABLED %}<a class="nav-link {{ 'selected' if active == 'playground' else '' }}" href="{{ url_for('playground.index') }}"><span aria-hidden="true">⚡</span> Local playground</a>{% endif %}
       </nav>
       <div class="sidebar-footer">
         <div class="env"><span class="pulse"></span> Local admin workspace</div>

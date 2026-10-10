@@ -11,7 +11,7 @@
 </div>
 <div class="two-column">
   <section class="panel"><div class="panel-heading"><div><div class="eyebrow">DELIVERY HEALTH</div><h2>Status distribution</h2></div><span class="subtle-tag">ALL TIME</span></div>
-    {% if total %}<div class="success-rate"><span>Success rate</span><strong>{{ (100 * summary['succeeded'] / total)|round(1) }}%</strong></div><progress class="health-progress" value="{{ summary['succeeded'] }}" max="{{ total }}">{{ summary['succeeded'] }} of {{ total }} succeeded</progress>{% else %}<div class="empty-message">No deliveries yet. Create an endpoint and destination to begin.</div>{% endif %}
+    {% if total %}<div class="success-rate"><span>Success rate</span><strong>{{ (100 * summary['succeeded'] / total)|round(1) }}%</strong></div><progress class="health-progress" value="{{ summary['succeeded'] }}" max="{{ total }}">{{ summary['succeeded'] }} of {{ total }} succeeded</progress>{% else %}<div class="empty-message">No deliveries yet. {% if config.LOCAL_PLAYGROUND_ENABLED %}<a class="text-link" href="{{ url_for('playground.index') }}">Try the local delivery playground →</a>{% else %}<a class="text-link" href="{{ url_for('dashboard.endpoints') }}">Create a destination →</a>{% endif %}</div>{% endif %}
     <div class="status-grid">{% for status in ['succeeded','pending','queued','sending','retry','dead'] %}<div class="status-stat"><span class="status-dot {{ 'good' if status == 'succeeded' else 'bad' if status == 'dead' else 'warn' if status == 'retry' else 'neutral' }}"></span><span>{{ status|capitalize }}</span><strong>{{ summary[status] }}</strong></div>{% endfor %}</div>
   </section>
   <section class="panel"><div class="panel-heading"><div><div class="eyebrow">CONFIGURATION</div><h2>Connected resources</h2></div></div>

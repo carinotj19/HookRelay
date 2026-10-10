@@ -1,0 +1,38 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Local playground{% endblock %}
+{% block crumb %}PLAYGROUND{% endblock %}
+{% block body %}
+<header class="page-heading">
+  <div><div class="eyebrow">LOCAL LABORATORY · LOOPBACK ONLY</div><h1>Delivery playground<span class="heading-dot">.</span></h1>
+  <p>Generate signed webhooks, simulate receiver errors, and watch delivery state change in real time.</p></div>
+  <a class="btn btn-outline" href="{{ url_for('dashboard.deliveries') }}">Delivery explorer →</a>
+</header>
+<div class="playground-note"><strong>Development-only simulation.</strong> This page is explicitly enabled, limited to localhost, and does not run Redis, Celery, or a background scheduler. <strong>Advance one step</strong> manually dispatches only playground deliveries and accelerates the waiting period between retries. Actual attempts, HMAC verification, and HTTP status codes are recorded in SQLite.</div>
+{% for message in get_flashed_messages() %}<div class="success-banner" role="status">{{ message }}</div>{% endfor %}
+<div class="panel playground-toolbar">
+  <div><div class="eyebrow">CONTROL PANEL</div><h2>Run the delivery pipeline</h2><p class="muted">Use three deterministic HTTP receivers on this same Flask server.</p></div>
+  <div class="playground-actions">
+    <form method="post" action="{{ url_for('playground.setup') }}"><input type="hidden" name="csrf_token" value="{{ session['dashboard_csrf'] }}"><button class="btn btn-outline" type="submit">{{ 'Refresh local receivers' if targets.values()|select|list|length == 3 else 'Initialize playground' }}</button></form>
+    <form method="post" action="{{ url_for('playground.step') }}"><input type="hidden" name="csrf_token" value="{{ session['dashboard_csrf'] }}"><button class="btn btn-primary" type="submit">Advance one step →</button></form>
+  </div>
+</div>
+<div class="playground-cards">
+{% for slug, scenario in scenarios.items() %}
+  <section class="panel playground-scenario">
+    <div class="eyebrow">SCENARIO 0{{ loop.index }}</div>
+    <h2>{{ scenario[0] }}</h2>
+    <p class="muted">{{ scenario[2] }}</p>
+    <div class="scenario-expect">{% if slug == 'success' %}<span class="pill pill-succeeded">204 on attempt 1</span>{% elif slug == 'recover' %}<span class="pill pill-retry">503 · 503 · 204</span>{% else %}<span class="pill pill-dead">503 until dead</span>{% endif %}</div>
+    <form method="post" action="{{ url_for('playground.send', slug=slug) }}"><input type="hidden" name="csrf_token" value="{{ session['dashboard_csrf'] }}"><button class="btn btn-outline" type="submit" {% if not targets[slug] %}disabled{% endif %}>Send signed event →</button></form>
+  </section>
+{% endfor %}
+</div>
+<section class="panel table-panel">
+  <div class="panel-heading"><div><div class="eyebrow">AUDIT TRAIL</div><h2>Recent playground deliveries</h2></div><a class="text-link" href="{{ url_for('dashboard.deliveries') }}">All deliveries →</a></div>
+  {% if deliveries %}
+  <div class="table-wrap"><table><thead><tr><th>SCENARIO / EVENT</th><th>STATUS</th><th>ATTEMPTS</th><th>LAST ERROR</th><th>DETAIL</th></tr></thead><tbody>
+  {% for d in deliveries %}<tr><td><strong>{{ labels.get(d.destination_id, d.destination.name) }}</strong><div class="muted small mono">{{ d.event.external_id }}</div></td><td><span class="pill pill-{{ d.status }}">{{ d.status }}</span></td><td>{{ d.attempt_count }} / {{ d.max_attempts }}</td><td>{{ d.last_error or '—' }}</td><td><a class="table-link" href="{{ url_for('dashboard.delivery_detail', delivery_id=d.id) }}">Inspect / replay ↗</a></td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="empty-message">No playground deliveries yet. Initialize the receivers, then send your first signed event.</div>{% endif %}
+</section>
+{% endblock %}
