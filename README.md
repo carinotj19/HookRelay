@@ -190,3 +190,55 @@ Open **http://127.0.0.1:8000/dashboard** in your browser and sign in with the `A
 **Session and security model:** The dashboard refuses to start without a separate, stable, **32+ character** `DASHBOARD_SESSION_SECRET`. Generate and save a strong secret in your deployment environment; a new secret invalidates all sessions. It never stores the raw admin key in the session. It uses a signed, HttpOnly, SameSite=Strict cookie with a 45-minute expiration and requires CSRF tokens for mutation and logout forms. HTML responses disable browser caching and framing. Creation pages reveal signing secrets once with no-store headers. Set `DASHBOARD_COOKIE_SECURE=1` behind HTTPS, require HTTPS for remote access, and keep `/dashboard` private. This is a **single-admin portfolio console**: it does not yet offer individual accounts, MFA, login rate limits, an operator audit trail, or RBAC. Do not expose it to the public internet as a multi-user SaaS service.
 
 **Developer tests:** `python -m pytest tests/test_dashboard.py -v --basetemp=./.pytest-tmp` exercises authorization isolation, CSRF, key rotation, secret visibility, forms, status/search filters, pagination, attempt history and replay. Linux, Windows, and PostgreSQL CI checks continue to run automatically.
+
+## Local delivery playground (Windows, no Docker)
+
+The optional **local delivery playground** walks through signed ingestion,
+HTTP 204 success, HTTP 503 retry recovery, dead-letter creation, and replay.
+It runs real outgoing HTTP requests back to the **threaded local Flask server**
+and verifies their outbound HMAC signatures. All attempts are stored in your
+local SQLite database. **No Redis, Celery, or Docker is required for this demo.**
+
+From the repository directory in PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+$env:ADMIN_API_KEY = "local-demo-key-replace-me"
+$env:DATABASE_URL = "sqlite:///hookrelay-docs.db"
+$env:DASHBOARD_SESSION_SECRET = python -c "import secrets; print(secrets.token_hex(32))"
+$env:LOCAL_PLAYGROUND_ENABLED = "1"
+python -m alembic upgrade head
+python -m flask --app hookrelay run --host 127.0.0.1 --port 8000 --with-threads
+```
+
+Open <http://127.0.0.1:8000/dashboard/playground>, sign in with the admin
+key, and follow these steps:
+
+1. **Initialize playground** creates three isolated demo endpoint/receiver pairs.
+   This is safe to click again if you restart Flask on a different port.
+2. **Send signed event** under each scenario; this calls the real `/hooks/<public_key>`
+   API with a valid per-source HMAC. The delivery is stored as `pending`.
+3. **Advance one step** to send HTTP requests to local receiver endpoints. For
+   *Transient failures*, click three times to see `retry`, `retry`, `succeeded`.
+   For *Dead-letter recovery*, keep advancing until the configured attempt limit
+   is reached and the delivery becomes `dead`.
+4. Open the delivery detail to inspect response codes/timings. Click **Replay**
+   on a dead letter; the replay becomes a new `pending` record, linked to the
+   original for auditing. Advance again to process it; the demo receiver now
+   returns HTTP 204 on replay to represent a recovered remote service.
+
+The **Advance one step** action intentionally bypasses the *waiting period*
+for retries **only on demo records**. The actual exponential-backoff algorithm
+remains unchanged; this is simulated time for interview demonstrations.
+The core dispatcher is scoped to the demo delivery IDs, so it cannot accidentally
+process unrelated pending deliveries.
+
+**Security and scope:** `LOCAL_PLAYGROUND_ENABLED` defaults to off. The routes
+require both client and Host to be loopback; dashboard actions additionally require
+an authenticated session and CSRF tokens. The signed local receiver rejects
+invalid signatures. The demo uses a narrowly scoped private URL override rather
+than enabling private destinations globally. Run Flask bound only to
+`127.0.0.1`; never expose the dev server publicly. The receiver operates within
+the same Flask process, so `--with-threads` is required. This does **not** test
+Redis/Celery outages, the independent PostgreSQL scheduler, or production egress
+security, and does **not** represent background processing.

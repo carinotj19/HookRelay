@@ -16,7 +16,7 @@ from .models import Delivery, DeliveryAttempt, new_id, utcnow
 from .security import sign, validate_destination_url
 
 
-def dispatch_due(publish):
+def dispatch_due(publish, *, only_delivery_ids=None):
     """Claim due DB records before publishing; expired leases are recoverable."""
     now = utcnow()
     due = or_(
@@ -25,6 +25,8 @@ def dispatch_due(publish):
     )
     stmt = (select(Delivery).where(due).order_by(Delivery.created_at)
             .limit(current_app.config["DISPATCH_BATCH_SIZE"]).with_for_update(skip_locked=True))
+    if only_delivery_ids is not None:
+        stmt = stmt.where(Delivery.id.in_(only_delivery_ids))
     rows = db.session.execute(stmt).scalars().all()
     claimed = []
     for row in rows:
@@ -60,7 +62,7 @@ def backoff_seconds(number: int) -> float:
     return nominal * (1 if current_app.config["TESTING"] else random.uniform(0.9, 1.1))
 
 
-def perform_delivery(delivery_id: str, token: str, sender=None) -> str:
+def perform_delivery(delivery_id: str, token: str, sender=None, *, allow_private_destination=False) -> str:
     """A task is valid only while it owns its DB-issued token."""
     row = db.session.execute(select(Delivery).where(Delivery.id == delivery_id).with_for_update()).scalar_one_or_none()
     if row is None or row.status != "queued" or row.lease_token != token:
@@ -81,7 +83,8 @@ def perform_delivery(delivery_id: str, token: str, sender=None) -> str:
     code = None
     error = None
     try:
-        validate_destination_url(row.destination.url, current_app.config["ALLOW_PRIVATE_DESTINATIONS"])
+        validate_destination_url(row.destination.url,
+                                 current_app.config["ALLOW_PRIVATE_DESTINATIONS"] or allow_private_destination)
         headers = {
             "Content-Type": "application/json",
             "X-HookRelay-Signature": sign(row.destination.signing_secret, row.event.payload),
