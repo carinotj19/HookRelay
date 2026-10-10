@@ -39,6 +39,8 @@ def test_spec_has_all_runtime_api_routes_and_methods(app, client):
         for route in app.url_map.iter_rules()
         if route.rule not in {"/docs", "/openapi.json"}
         and not route.rule.startswith("/static/")
+        # Browser-rendered dashboard pages are not part of the public JSON API.
+        and not route.rule.startswith("/dashboard")
         for method in route.methods - {"OPTIONS", "HEAD"}
     }
     assert documented == actual
